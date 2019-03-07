@@ -21,6 +21,13 @@ KONG_PATCH=$(echo $1 | sed -e "s#$VERSION_RE#\3#")
 let "KONG_NUM_VERSION = KONG_MAJOR * 10000 + KONG_MINOR * 100 + KONG_PATCH"
 
 echo "*************************************************************************"
+echo " Disabling DNSSEC so our repositories resolve                            "
+echo "*************************************************************************"
+
+sudo sed -i 's/DNSSEC=yes/DNSSEC=no/g' /etc/systemd/resolved.conf
+sudo service systemd-resolved restart
+
+echo "*************************************************************************"
 echo "Installing Kong version: $KONG_VERSION"
 echo "*************************************************************************"
 
@@ -107,7 +114,7 @@ if [ $KONG_NUM_VERSION -ge 001500 ]; then
 fi
 
 sudo -E apt-get install -qq httpie jq
-sudo -E apt-get install -qq git curl make pkg-config unzip apt-transport-https language-pack-en libssl-dev m4 cpanminus
+sudo -E apt-get install -qq git curl make pkg-config unzip apt-transport-https language-pack-en libssl-dev m4 cpanminus ca-certificates
 
 echo "*************************************************************************"
 echo "Installing test tools for Test::Nginx"
@@ -165,9 +172,27 @@ set -o errexit
 echo "*************************************************************************"
 echo "Installing Redis"
 echo "*************************************************************************"
+set +o errexit
+# this might fail, so we ensure it works below
+if ! sudo -E apt-get install -qq redis-server; then
+  echo "Redis inital start failed... Workaround in progress"
+  # this ensures we have a redis.pid file present for redis to use later on
+  sudo touch /var/run/redis/redis.pid
+  sudo chown redis /var/run/redis/redis.pid
 
-sudo -E apt-get install -qq redis-server
+  # updates config so we only bind to IPv4
+  sudo sed -i 's/bind 127\.0\.0\.1 \:\:1/bind 127\.0\.0\.1/g' /etc/redis/redis.conf
+fi
+
+# updates config so we use systemd
+sudo sed -i 's/supervised no/supervised systemd/g' /etc/redis/redis.conf
+
 sudo chown vagrant /var/log/redis/redis-server.log
+set -o errexit
+
+# (re)start the service
+sudo systemctl restart redis-server
+echo "Redis started successfully"
 
 echo "*************************************************************************"
 echo "Installing Java and Cassandra $CASSANDRA_VERSION"
