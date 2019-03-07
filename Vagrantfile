@@ -87,7 +87,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     vb.customize ["guestproperty", "set", :id, "/VirtualBox/GuestAdd/VBoxService/ — timesync-set-threshold", 10000]
   end
 
-  config.vm.box = "ubuntu/bionic64"
+  config.vm.provider :hyperv do |hyperv|
+    hyperv.maxmemory =  memory
+    hyperv.memory = memory
+    hyperv.cpus = cpus
+  end
+
+  config.vm.box = "generic/ubuntu1804"
 
   if not source == ""
     config.vm.synced_folder source, "/kong"
